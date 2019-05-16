@@ -490,10 +490,40 @@ def main(_):
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
+  def walk_path(location: str,
+                only_dir: bool = False,
+                depth: int = None,
+                extension: str = None):
+      """Walks through specified remote or local directory.
+  
+      Args:
+          location: local or remote directory to start walk.
+          only_dir: if True, only directories are yielded,
+              else only files.
+          depth: number of subdirectories to recursively walk through.
+              if unspecified, walk through all subdirectories.
+          extension: if specified, only files the end with this
+              extension are returned.
+      Yields:
+          local or remote path.
+  
+      """
+      for level, (root, dirs, file_names) in enumerate(
+              tf.gfile.Walk(top=location)):
+          if only_dir:
+              for dir_name in dirs:
+                  yield os.path.join(root, dir_name)
+          else:
+              for file_name in file_names:
+                  if extension and not file_name.endswith(extension):
+                      continue
+                  yield os.path.join(root, file_name)
+          if depth is not None and depth == level:
+              return
+
   input_files = []
-  from gcloud.gcs import fhfile
-  if fhfile.IsDirectory(FLAGS.input_file):
-    input_files = list(fhfile.walk_path(FLAGS.input_file))
+  if tf.gfile.Exists(FLAGS.input_file):
+    input_files = list(walk_path(FLAGS.input_file))
   else:
     for input_pattern in FLAGS.input_file.split(","):
       input_files.extend(tf.gfile.Glob(input_pattern))
