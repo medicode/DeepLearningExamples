@@ -158,6 +158,10 @@ flags.DEFINE_float(
 flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
+if FLAGS.use_fp16:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+    print('Turning on AMP')
+
 # report samples/sec, total loss and learning rate during training
 class _LogEvalRunHook(tf.train.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1):
