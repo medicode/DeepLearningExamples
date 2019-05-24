@@ -162,6 +162,10 @@ flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
     #os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
     #print('Turning on AMP')
 
+if FLAGS.horovod:
+    print('Turning on TF_XLA_FLAGS=--tf_xla_cpu_global_jit')
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_cpu_global_jit"
+
 # report samples/sec, total loss and learning rate during training
 class _LogEvalRunHook(tf.train.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1):
