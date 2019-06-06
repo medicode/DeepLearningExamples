@@ -175,7 +175,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   #batch_size = extended_batch_size / chunk_size
 
   #body_outputs = tf.reshape(body_outputs, [batch_size, extended_batch_size, depth])
-
+  '''
   body_outputs = tf.expand_dims(body_outputs, axis=-2)
   features = {
     'targets': labels
@@ -185,10 +185,33 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   top_out = target_modality.top(body_outputs, features)
 
   num, den = target_modality.loss(top_out, labels)
-  print('num, den', num, den)
   loss = num / den
 
   return loss, top_out['logits']
+  '''
+  hidden_size = body_outputs.shape[-1].value
+
+  output_weights = tf.get_variable(
+      "output_weights", [num_labels, hidden_size],
+      initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+  output_bias = tf.get_variable(
+      "output_bias", [num_labels], initializer=tf.zeros_initializer())
+
+  with tf.variable_scope("loss"):
+    if is_training:
+      # I.e., 0.1 dropout
+      body_outputs = tf.nn.dropout(body_outputs, keep_prob=0.9)
+
+    logits = tf.matmul(body_outputs, output_weights, transpose_b=True)
+    logits = tf.nn.bias_add(logits, output_bias)
+    log_probs = tf.nn.log_softmax(logits, axis=-1)
+
+    one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
+
+    per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+    loss = tf.reduce_mean(per_example_loss)
+    return loss, logits
 
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
