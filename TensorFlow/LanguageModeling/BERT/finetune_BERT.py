@@ -323,6 +323,7 @@ def main(_):
     tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
         FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
 
+  learning_rate = FLAGS.learning_rate
   if FLAGS.horovod:
       tf.logging.info("Multi-GPU training with TF Horovod")
       tf.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
@@ -386,7 +387,7 @@ def main(_):
       bert_config=bert_config,
       num_labels=10,
       init_checkpoint=FLAGS.init_checkpoint,
-      learning_rate=FLAGS.learning_rate,
+      learning_rate=learning_rate,
       num_train_steps=num_train_steps,
       num_warmup_steps=num_warmup_steps,
       use_tpu=FLAGS.use_tpu,
