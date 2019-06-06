@@ -189,6 +189,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
   return loss, top_out['logits']
   '''
+  body_outputs = model.get_pooled_output()
   hidden_size = body_outputs.shape[-1].value
 
   output_weights = tf.get_variable(
