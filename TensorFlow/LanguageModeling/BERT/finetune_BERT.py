@@ -117,6 +117,10 @@ flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on 
 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
+if FLAGS.use_fp16:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+    print('Turning on AMP')
+
 # report samples/sec, total loss and learning rate during training
 class _LogEvalRunHook(tf.train.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1):
@@ -149,124 +153,6 @@ class _LogTrainRunHook(tf.train.SessionRunHook):
     elapsed_secs = time.time() - self.t0
     self.total_time += elapsed_secs
     self.count += 1
-
-class InputExample(object):
-  """A single training/test example for simple sequence classification."""
-
-  def __init__(self, guid, text_a, text_b=None, label=None):
-    """Constructs a InputExample.
-
-    Args:
-      guid: Unique id for the example.
-      text_a: string. The untokenized text of the first sequence. For single
-        sequence tasks, only this sequence must be specified.
-      text_b: (Optional) string. The untokenized text of the second sequence.
-        Only must be specified for sequence pair tasks.
-      label: (Optional) string. The label of the example. This should be
-        specified for train and dev examples, but not for test examples.
-    """
-    self.guid = guid
-    self.text_a = text_a
-    self.text_b = text_b
-    self.label = label
-
-
-class PaddingInputExample(object):
-  """Fake example so the num input examples is a multiple of the batch size.
-
-  When running eval/predict on the TPU, we need to pad the number of examples
-  to be a multiple of the batch size, because the TPU requires a fixed batch
-  size. The alternative is to drop the last batch, which is bad because it means
-  the entire output data won't be generated.
-
-  We use this class instead of `None` because treating `None` as padding
-  battches could cause silent errors.
-  """
-
-
-class InputFeatures(object):
-  """A single set of features of data."""
-
-  def __init__(self,
-               input_ids,
-               input_mask,
-               segment_ids,
-               label_id,
-               is_real_example=True):
-    self.input_ids = input_ids
-    self.input_mask = input_mask
-    self.segment_ids = segment_ids
-    self.label_id = label_id
-    self.is_real_example = is_real_example
-
-
-class DataProcessor(object):
-  """Base class for data converters for sequence classification data sets."""
-
-  def get_train_examples(self, data_dir):
-    """Gets a collection of `InputExample`s for the train set."""
-    raise NotImplementedError()
-
-  def get_dev_examples(self, data_dir):
-    """Gets a collection of `InputExample`s for the dev set."""
-    raise NotImplementedError()
-
-  def get_test_examples(self, data_dir):
-    """Gets a collection of `InputExample`s for prediction."""
-    raise NotImplementedError()
-
-  def get_labels(self):
-    """Gets the list of labels for this data set."""
-    raise NotImplementedError()
-
-  @classmethod
-  def _read_tsv(cls, input_file, quotechar=None):
-    """Reads a tab separated value file."""
-    with tf.gfile.Open(input_file, "r") as f:
-      reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
-      lines = []
-      for line in reader:
-        lines.append(line)
-      return lines
-
-
-class DummyProcessor(DataProcessor):
-
-    def get_train_examples(self):
-        return self._create_examples(10, 'train')
-
-    def get_dev_examples(self):
-        return self._create_examples(2, 'dev')
-
-    def get_test_examples(self):
-        return self._create_examples(2, 'test')
-
-    def get_labels(self):
-        return ["0", "1"]
-
-    def _create_examples(self, num_lines, set_type):
-        examples = []
-        for i in range(num_lines):
-            guid = "%s-%d" % (set_type, i)
-            examples.append(InputExample(guid=guid, text_a='dummy dummy, dummy', label='0'))
-        return examples
-
-
-def _truncate_seq_pair(tokens_a, tokens_b, max_length):
-  """Truncates a sequence pair in place to the maximum length."""
-
-  # This is a simple heuristic which will always truncate the longer sequence
-  # one token at a time. This makes more sense than truncating an equal percent
-  # of tokens from each, since if one sequence is very short then each token
-  # that's truncated likely contains more information than a longer sequence.
-  while True:
-    total_length = len(tokens_a) + len(tokens_b)
-    if total_length <= max_length:
-      break
-    if len(tokens_a) > len(tokens_b):
-      tokens_a.pop()
-    else:
-      tokens_b.pop()
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
@@ -477,9 +363,6 @@ def main(_):
   hparams_set = 'finetune_bert'
   setup_dataset_flag()
   FLAGS.dataset_split = 'train'
-  if FLAGS.use_fp16:
-      os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
-      print('Turning on AMP')
 
   hparams = create_hparams(hparams_set=hparams_set, problem_name=problem_name)
   #problem = registry.problem(problem_name)
