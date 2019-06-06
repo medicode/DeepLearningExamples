@@ -117,9 +117,6 @@ flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on 
 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
-if FLAGS.use_fp16:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
-    print('Turning on AMP')
 
 # report samples/sec, total loss and learning rate during training
 class _LogEvalRunHook(tf.train.SessionRunHook):
@@ -271,15 +268,12 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
+  if FLAGS.use_fp16:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+    print('Turning on AMP')
+
   if FLAGS.horovod:
     hvd.init()
-
-  processors = {
-      "dummy": DummyProcessor
-  }
-
-  #tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
-                                                #FLAGS.init_checkpoint)
 
   if not FLAGS.do_train and not FLAGS.do_eval and not FLAGS.do_predict:
     raise ValueError(
@@ -294,17 +288,6 @@ def main(_):
         (FLAGS.max_seq_length, bert_config.max_position_embeddings))
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
-
-  #task_name = FLAGS.task_name.lower()
-
-  task_name = 'dummy'
-
-  if task_name not in processors:
-    raise ValueError("Task not found: %s" % (task_name))
-
-  processor = processors[task_name]()
-
-  label_list = processor.get_labels()
 
   training_hooks = []
   global_batch_size = FLAGS.train_batch_size
@@ -376,7 +359,7 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      num_labels=len(label_list),
+      num_labels=10,
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=FLAGS.learning_rate,
       num_train_steps=num_train_steps,
