@@ -381,7 +381,7 @@ def main(_):
 
   hparams.data_dir = 'gs://fathom-dev-210618-workspace-h5bnpfec/FINETUNE_BERT/2019-06-06T07-57-40.391508+00-00/usr.src.bert.finetune_BERT.py/data_dir'
   ## INGEST
-  problem.generate_data(FLAGS.data_dir, FLAGS.tmp_dir)
+  #problem.generate_data(FLAGS.data_dir, FLAGS.tmp_dir)
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
