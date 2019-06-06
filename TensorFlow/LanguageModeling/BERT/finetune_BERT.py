@@ -323,6 +323,7 @@ def main(_):
     tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
         FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
 
+  config = tf.ConfigProto()
   learning_rate = FLAGS.learning_rate
   if FLAGS.horovod:
       tf.logging.info("Multi-GPU training with TF Horovod")
@@ -336,7 +337,6 @@ def main(_):
       if hvd.size() > 1:
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
 
-  config = tf.ConfigProto()
   if FLAGS.use_xla: 
     config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
