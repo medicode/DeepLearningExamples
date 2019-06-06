@@ -175,7 +175,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   #batch_size = extended_batch_size / chunk_size
 
   #body_outputs = tf.reshape(body_outputs, [batch_size, extended_batch_size, depth])
-  '''
+  #'''
   body_outputs = tf.expand_dims(body_outputs, axis=-2)
   features = {
     'targets': labels
@@ -213,6 +213,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
     loss = tf.reduce_mean(per_example_loss)
     return loss, logits
+  '''
 
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
