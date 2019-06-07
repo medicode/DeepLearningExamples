@@ -165,7 +165,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
-      compute_type=tf.float16 if FLAGS.use_fp16 else tf.float32)
+      compute_type=tf.float32)
 
   # [B, 384, D]
   body_outputs = model.get_sequence_output()
