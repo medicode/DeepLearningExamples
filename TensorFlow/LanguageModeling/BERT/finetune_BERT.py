@@ -188,62 +188,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   loss = num / den
 
   return loss, top_out['logits']
-  '''
-  # classifier
-  body_outputs = model.get_pooled_output()
-  hidden_size = body_outputs.shape[-1].value
 
-  output_weights = tf.get_variable(
-      "output_weights", [num_labels, hidden_size],
-      initializer=tf.truncated_normal_initializer(stddev=0.02))
-
-  output_bias = tf.get_variable(
-      "output_bias", [num_labels], initializer=tf.zeros_initializer())
-
-  with tf.variable_scope("loss"):
-    if is_training:
-      # I.e., 0.1 dropout
-      body_outputs = tf.nn.dropout(body_outputs, keep_prob=0.9)
-
-    logits = tf.matmul(body_outputs, output_weights, transpose_b=True)
-    logits = tf.nn.bias_add(logits, output_bias)
-    log_probs = tf.nn.log_softmax(logits, axis=-1)
-
-    one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
-
-    per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-    loss = tf.reduce_mean(per_example_loss)
-    return loss, logits
-
-  # squad
-  final_hidden = model.get_sequence_output()
-
-  final_hidden_shape = modeling.get_shape_list(final_hidden, expected_rank=3)
-  batch_size = final_hidden_shape[0]
-  seq_length = final_hidden_shape[1]
-  hidden_size = final_hidden_shape[2]
-
-  output_weights = tf.get_variable(
-      "cls/squad/output_weights", [2, hidden_size],
-      initializer=tf.truncated_normal_initializer(stddev=0.02))
-
-  output_bias = tf.get_variable(
-      "cls/squad/output_bias", [2], initializer=tf.zeros_initializer())
-
-  final_hidden_matrix = tf.reshape(final_hidden,
-                                   [batch_size * seq_length, hidden_size])
-  logits = tf.matmul(final_hidden_matrix, output_weights, transpose_b=True)
-  logits = tf.nn.bias_add(logits, output_bias)
-
-  logits = tf.reshape(logits, [batch_size, seq_length, 2])
-  logits = tf.transpose(logits, [2, 0, 1])
-
-  unstacked_logits = tf.unstack(logits, axis=0)
-
-  (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
-  return start_logits, end_logits
-
-  #'''
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps, use_tpu,
@@ -294,25 +239,6 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
-    ####
-      seq_length = modeling.get_shape_list(input_ids)[1]
-      def compute_loss(logits, positions):
-        one_hot_positions = tf.one_hot(
-            positions, depth=seq_length, dtype=tf.float32)
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
-        loss = -tf.reduce_mean(
-            tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
-        return loss
-
-      start_positions = [labels]
-      end_positions = [labels]
-
-      start_loss = compute_loss(start_logits, start_positions)
-      end_loss = compute_loss(end_logits, end_positions)
-
-      total_loss = (start_loss + end_loss) / 2.0
-
-      ###
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu,
           hvd, amp=use_fp16)
