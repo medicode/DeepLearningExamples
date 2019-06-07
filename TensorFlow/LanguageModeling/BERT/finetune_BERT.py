@@ -353,7 +353,7 @@ def main(_):
   target_modality = hparams.target_modality
   problem = hparams.problem
 
-  hparams.data_dir = 'gs://fathom-dev-210618-workspace-h5bnpfec/FINETUNE_BERT/2019-06-06T07-57-40.391508+00-00/usr.src.bert.finetune_BERT.py/data_dir'
+  hparams.data_dir = FLAGS.data_dir
   ## INGEST
   #problem.generate_data(FLAGS.data_dir, FLAGS.tmp_dir)
 
