@@ -166,6 +166,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
       compute_type=tf.float32)
+  '''
 
   # [B, 384, D]
   body_outputs = model.get_sequence_output()
@@ -175,7 +176,6 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   #batch_size = extended_batch_size / chunk_size
 
   #body_outputs = tf.reshape(body_outputs, [batch_size, extended_batch_size, depth])
-  '''
   body_outputs = tf.expand_dims(body_outputs, axis=-2)
   features = {
     'targets': labels
@@ -242,25 +242,8 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   unstacked_logits = tf.unstack(logits, axis=0)
 
   (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
+  return start_logits, end_logits
 
-  seq_length = modeling.get_shape_list(input_ids)[1]
-  def compute_loss(logits, positions):
-    one_hot_positions = tf.one_hot(
-        positions, depth=seq_length, dtype=tf.float32)
-    log_probs = tf.nn.log_softmax(logits, axis=-1)
-    loss = -tf.reduce_mean(
-        tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
-    return loss
-
-  start_positions = [labels]
-  end_positions = [labels]
-
-  start_loss = compute_loss(start_logits, start_positions)
-  end_loss = compute_loss(end_logits, end_positions)
-
-  total_loss = (start_loss + end_loss) / 2.0
-
-  return total_loss, start_logits
   #'''
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
@@ -282,7 +265,8 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
-    (total_loss, logits) = create_model(
+    #(total_loss, logits) = create_model(
+    (start_logits, end_logits) = create_model(
         bert_config, is_training, input_ids, input_mask, segment_ids, label_ids,
         num_labels, use_one_hot_embeddings, hparams)
 
@@ -311,7 +295,25 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
+    ####
+      seq_length = modeling.get_shape_list(input_ids)[1]
+      def compute_loss(logits, positions):
+        one_hot_positions = tf.one_hot(
+            positions, depth=seq_length, dtype=tf.float32)
+        log_probs = tf.nn.log_softmax(logits, axis=-1)
+        loss = -tf.reduce_mean(
+            tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
+        return loss
 
+      start_positions = [labels]
+      end_positions = [labels]
+
+      start_loss = compute_loss(start_logits, start_positions)
+      end_loss = compute_loss(end_logits, end_positions)
+
+      total_loss = (start_loss + end_loss) / 2.0
+
+      ###
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu,
           hvd, amp=use_fp16)
@@ -384,8 +386,9 @@ def main(_):
       if hvd.size() > 1:
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
 
-  if FLAGS.use_xla: 
+  if FLAGS.use_xla:
     config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
   run_config = tf.contrib.tpu.RunConfig(
       cluster=tpu_cluster_resolver,
