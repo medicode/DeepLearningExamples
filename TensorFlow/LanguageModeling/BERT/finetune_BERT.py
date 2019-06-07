@@ -461,7 +461,9 @@ def main(_):
     tf.logging.info("***** Running training *****")
     tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
     tf.logging.info("  Num steps = %d", num_train_steps)
-    train_input_fn = problem.make_estimator_input_fn(tf.estimator.ModeKeys.TRAIN, hparams)
+    #train_input_fn = problem.make_estimator_input_fn(tf.estimator.ModeKeys.TRAIN, hparams)
+    train_input_fn = problem.horovod_input_fn_builder(
+        is_training=True, hvd=None if not FLAGS.horovode else hvd)
     training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
     if FLAGS.horovod:
         barrier = hvd.allreduce(tf.constant(0))
