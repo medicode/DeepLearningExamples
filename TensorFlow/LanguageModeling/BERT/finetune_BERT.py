@@ -305,8 +305,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
             tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
         return loss
 
-      start_positions = [labels]
-      end_positions = [labels]
+      start_positions = end_positions = tf.ones_like([tf.shape(start_logits)[0], 1])
 
       start_loss = compute_loss(start_logits, start_positions)
       end_loss = compute_loss(end_logits, end_positions)
