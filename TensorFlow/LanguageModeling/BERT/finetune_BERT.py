@@ -188,7 +188,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   loss = num / den
 
   return loss, top_out['logits']
-  '''
+
   # classifier
   body_outputs = model.get_pooled_output()
   hidden_size = body_outputs.shape[-1].value
@@ -243,6 +243,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
   (start_logits, end_logits) = (unstacked_logits[0], unstacked_logits[1])
 
+  seq_length = modeling.get_shape_list(input_ids)[1]
   def compute_loss(logits, positions):
     one_hot_positions = tf.one_hot(
         positions, depth=seq_length, dtype=tf.float32)
