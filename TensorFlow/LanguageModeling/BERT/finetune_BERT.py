@@ -166,7 +166,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
       compute_type=tf.float32)
-  '''
+  #'''
 
   # [B, 384, D]
   body_outputs = model.get_sequence_output()
@@ -188,7 +188,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   loss = num / den
 
   return loss, top_out['logits']
-
+  '''
   # classifier
   body_outputs = model.get_pooled_output()
   hidden_size = body_outputs.shape[-1].value
@@ -214,8 +214,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
     loss = tf.reduce_mean(per_example_loss)
     return loss, logits
-  '''
-  #'''
+
   # squad
   final_hidden = model.get_sequence_output()
 
@@ -305,7 +304,8 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
             tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
         return loss
 
-      start_positions = end_positions = tf.ones_like([tf.shape(start_logits)[0], 1])
+      start_positions = [labels]
+      end_positions = [labels]
 
       start_loss = compute_loss(start_logits, start_positions)
       end_loss = compute_loss(end_logits, end_positions)
