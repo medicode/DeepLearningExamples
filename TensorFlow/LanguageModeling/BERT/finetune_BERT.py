@@ -252,8 +252,8 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
         tf.reduce_sum(one_hot_positions * log_probs, axis=-1))
     return loss
 
-  start_positions = [label_ids]
-  end_positions = [label_ids]
+  start_positions = [labels]
+  end_positions = [labels]
 
   start_loss = compute_loss(start_logits, start_positions)
   end_loss = compute_loss(end_logits, end_positions)
