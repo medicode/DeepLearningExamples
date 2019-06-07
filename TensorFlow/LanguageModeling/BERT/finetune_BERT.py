@@ -463,6 +463,11 @@ def main(_):
     tf.logging.info("  Num steps = %d", num_train_steps)
     train_input_fn = problem.make_estimator_input_fn(tf.estimator.ModeKeys.TRAIN, hparams)
     training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
+    if FLAGS.horovod:
+        barrier.hvd.allreduce(tf.constant(0))
+        with tf.Session(config=config) as sess:
+            sess.run(barrier)
+
     estimator.train(
         input_fn=train_input_fn,
         hooks=training_hooks,
