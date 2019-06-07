@@ -256,7 +256,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   end_positions = [label_ids]
 
   start_loss = compute_loss(start_logits, start_positions)
-  end_loss = compute_loss(end_lotis, end_positions)
+  end_loss = compute_loss(end_logits, end_positions)
 
   total_loss = (start_loss + end_loss) / 2.0
 
