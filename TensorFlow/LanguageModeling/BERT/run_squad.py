@@ -679,14 +679,14 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       else:
         tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
     
-    if FLAGS.verbose_logging:
-        tf.logging.info("**** Trainable Variables ****")
-        for var in tvars:
-          init_string = ""
-          if var.name in initialized_variable_names:
-            init_string = ", *INIT_FROM_CKPT*"
-          tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
-                          init_string)
+    #if FLAGS.verbose_logging:
+    tf.logging.info("**** Trainable Variables ****")
+    for var in tvars:
+      init_string = ""
+      if var.name in initialized_variable_names:
+        init_string = ", *INIT_FROM_CKPT*"
+      tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
+                      init_string)
 
 
     output_spec = None
