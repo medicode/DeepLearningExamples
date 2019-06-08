@@ -276,6 +276,8 @@ def main(_):
   if FLAGS.use_fp16:
     os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
     print('Turning on AMP')
+  else:
+    print('NOT Turning on AMP')
 
   if FLAGS.horovod:
     hvd.init()
