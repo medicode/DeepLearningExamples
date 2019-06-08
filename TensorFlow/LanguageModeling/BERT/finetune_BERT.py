@@ -152,6 +152,13 @@ class _LogTrainRunHook(tf.train.SessionRunHook):
     self.count += 1
 
 
+class _OomReportingHook(tf.train.SessionRunHook):
+    def before_run(self, run_context):
+        return tf.train.SessionRunArgs(fetches=[],  # no extra fetches
+                              options=tf.RunOptions(
+                                  report_tensor_allocations_upon_oom=True))
+
+
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
                  labels, num_labels, use_one_hot_embeddings, hparams):
   """Creates a classification model."""
@@ -392,13 +399,7 @@ def main(_):
         #hvd=None if not FLAGS.horovod else hvd)
     training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
 
-    class OomReportingHook(tf.train.SessionRunHook):
-        def before_run(self, run_context):
-            return tf.train.SessionRunArgs(fetches=[],  # no extra fetches
-                                  options=tf.RunOptions(
-                                      report_tensor_allocations_upon_oom=True))
-
-    training_hooks.append(OomReportingHook)
+    training_hooks.append(_OomReportingHook)
     if FLAGS.horovod:
         barrier = hvd.allreduce(tf.constant(0))
         with tf.Session(config=config) as sess:
