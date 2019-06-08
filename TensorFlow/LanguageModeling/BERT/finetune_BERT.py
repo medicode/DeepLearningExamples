@@ -399,7 +399,7 @@ def main(_):
         #hvd=None if not FLAGS.horovod else hvd)
     training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
 
-    training_hooks.append(_OomReportingHook)
+    training_hooks.append(_OomReportingHook())
     if FLAGS.horovod:
         barrier = hvd.allreduce(tf.constant(0))
         with tf.Session(config=config) as sess:
