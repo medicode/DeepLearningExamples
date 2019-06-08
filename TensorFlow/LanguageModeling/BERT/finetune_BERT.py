@@ -391,6 +391,14 @@ def main(_):
         #mode=tf.estimator.ModeKeys.TRAIN, hparams=hparams,
         #hvd=None if not FLAGS.horovod else hvd)
     training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
+
+    class OomReportingHook(tf.train.SessionRunHook):
+        def before_run(self, run_context):
+            return tf.train.SessionRunArgs(fetches=[],  # no extra fetches
+                                  options=tf.RunOptions(
+                                      report_tensor_allocations_upon_oom=True))
+
+    training_hooks.append(OomReportingHook)
     if FLAGS.horovod:
         barrier = hvd.allreduce(tf.constant(0))
         with tf.Session(config=config) as sess:
