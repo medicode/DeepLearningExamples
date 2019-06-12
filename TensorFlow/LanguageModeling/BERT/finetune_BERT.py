@@ -173,7 +173,6 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
       compute_type=tf.float32)
-  #'''
 
   # [B, 384, D]
   body_outputs = model.get_sequence_output()
@@ -184,12 +183,10 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
   #body_outputs = tf.reshape(body_outputs, [batch_size, extended_batch_size, depth])
   body_outputs = tf.expand_dims(body_outputs, axis=-2)
-  features = {
-    'targets': labels
-  }
-  labels = tf.reshape(labels, [tf.shape(labels)[0], 1, 1, 1])
 
-  top_out = target_modality.top(body_outputs, features)
+  top_out = target_modality.top(body_outputs, None)
+
+  #labels = tf.expand_dims(tf.expand_dims(labels, axis=-1), axis=-1)
 
   num, den = target_modality.loss(top_out, labels)
   loss = num / den
