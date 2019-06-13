@@ -288,6 +288,7 @@ def main(_):
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
+  master_process = True
   training_hooks = []
   global_batch_size = FLAGS.train_batch_size
   hvd_rank = 0
@@ -383,15 +384,8 @@ def main(_):
       eval_batch_size=FLAGS.eval_batch_size,
       predict_batch_size=FLAGS.predict_batch_size)
 
-  tf.logging.info("***** Running training *****",
-                  hvd.rank() if FLAGS.horovod else 'no hvd', )
-  #tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
-  #tf.logging.info("  Num steps = %d", num_train_steps)
   train_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
-  #train_input_fn = problem.horovod_input_fn_builder(
-      #mode=tf.estimator.ModeKeys.TRAIN, hparams=hparams,
-      #hvd=None if not FLAGS.horovod else hvd)
   training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
 
   #training_hooks.append(_OomReportingHook())
@@ -403,18 +397,18 @@ def main(_):
 
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   for n in range(train_eval_iterations):
+      if master_process:
+          tf.logging.info("***** Running training *****",
+                          hvd.rank() if FLAGS.horovod else 'no hvd')
+      # TODO: verify we are not reloading bert every time
       estimator.train(
           input_fn=train_input_fn,
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=num_train_steps)
 
-      if FLAGS.horovod:
-          barrier = hvd.allreduce(tf.constant(0))
-          with tf.Session(config=config) as sess:
-              sess.run(barrier)
-
-      if not FLAGS.horovod or hvd.rank() == 0:
+      if master_process:
+          tf.logging.info("***** Running eval *****")
           result = estimator.evaluate(
                 input_fn=eval_input_fn,
                 steps=eval_steps,
