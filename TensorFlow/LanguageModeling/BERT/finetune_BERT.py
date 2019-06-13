@@ -56,10 +56,6 @@ flags.DEFINE_integer(
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
 
-flags.DEFINE_bool("do_train", False, "Whether to run training.")
-
-flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
-
 flags.DEFINE_bool(
     "do_predict", False,
     "Whether to run the model in inference mode on the test set.")
@@ -186,8 +182,6 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
   top_out = target_modality.top(body_outputs, None)
 
-  #labels = tf.expand_dims(tf.expand_dims(labels, axis=-1), axis=-1)
-
   num, den = target_modality.loss(top_out, labels)
   loss = num / den
 
@@ -196,7 +190,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps, use_tpu,
-                     use_one_hot_embeddings, hparams, hvd=None, use_fp16=False):
+                     use_one_hot_embeddings, hparams, problem, hvd=None, use_fp16=False):
   """Returns `model_fn` closure for TPUEstimator."""
 
   def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
@@ -252,10 +246,15 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
           train_op=train_op,
           scaffold_fn=scaffold_fn)
     elif mode == tf.estimator.ModeKeys.EVAL:
+      #logits.update({'labels': labels})
+      eval_metrics = lambda logits, labels: {
+          name: call(logits, labels)
+          for name, call in problem.all_metrics_fns.items()
+          if name in problem.eval_metrics()}
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
-          eval_metrics=problem.eval_metrics,
+          eval_metrics=(eval_metrics, [logits, labels]),
           scaffold_fn=scaffold_fn)
     else:
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
@@ -278,10 +277,6 @@ def main(_):
 
   if FLAGS.horovod:
     hvd.init()
-
-  if not FLAGS.do_train and not FLAGS.do_eval and not FLAGS.do_predict:
-    raise ValueError(
-        "At least one of `do_train`, `do_eval` or `do_predict' must be True.")
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
@@ -333,11 +328,12 @@ def main(_):
           per_host_input_for_training=is_per_host))
 
   train_examples = None
-  num_train_steps = None
-  num_warmup_steps = None
-  if FLAGS.do_train:
-    num_train_steps = 1000
-    num_warmup_steps = 1
+  num_train_steps = 2000
+  num_warmup_steps = 1
+  eval_frequency_steps = 100
+  assert num_train_steps % eval_frequency_steps == 0
+  train_eval_iterations = num_train_steps // eval_frequency_steps
+  eval_steps = 100
 
   # If TPU is not available, this will fall back to normal Estimator on CPU
   # or GPU.
@@ -365,7 +361,7 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      num_labels=10,
+      num_labels=problem.label_manager,
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=learning_rate,
       num_train_steps=num_train_steps,
@@ -373,6 +369,7 @@ def main(_):
       use_tpu=FLAGS.use_tpu,
       use_one_hot_embeddings=FLAGS.use_tpu,
       hparams=hparams,
+      problem=problem,
       hvd=None if not FLAGS.horovod else hvd,
       use_fp16=FLAGS.use_fp16)
 
@@ -387,43 +384,42 @@ def main(_):
       eval_batch_size=FLAGS.eval_batch_size,
       predict_batch_size=FLAGS.predict_batch_size)
 
-  if FLAGS.do_train:
-    tf.logging.info("***** Running training *****")
-    tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
-    tf.logging.info("  Num steps = %d", num_train_steps)
-    train_input_fn = problem.make_estimator_input_fn(
-        tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
-    #train_input_fn = problem.horovod_input_fn_builder(
-        #mode=tf.estimator.ModeKeys.TRAIN, hparams=hparams,
-        #hvd=None if not FLAGS.horovod else hvd)
-    training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
+  tf.logging.info("***** Running training *****")
+  tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
+  tf.logging.info("  Num steps = %d", num_train_steps)
+  train_input_fn = problem.make_estimator_input_fn(
+      tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
+  #train_input_fn = problem.horovod_input_fn_builder(
+      #mode=tf.estimator.ModeKeys.TRAIN, hparams=hparams,
+      #hvd=None if not FLAGS.horovod else hvd)
+  training_hooks.append(_LogTrainRunHook(global_batch_size, hvd_rank))
 
-    training_hooks.append(_OomReportingHook())
-    if FLAGS.horovod:
-        barrier = hvd.allreduce(tf.constant(0))
-        with tf.Session(config=config) as sess:
-            sess.run(barrier)
+  #training_hooks.append(_OomReportingHook())
 
-    estimator.train(
-        input_fn=train_input_fn,
-        hooks=training_hooks,
-        max_steps=num_train_steps)
+  eval_input_fn = problem.make_estimator_input_fn(
+      tf.estimator.ModeKeys.EVAL,
+      hparams,
+      None if not FLAGS.horovod else hvd)
 
-  if FLAGS.do_eval:
-    tf.logging.info("***** Running evaluation *****")
-    tf.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
+  if FLAGS.horovod:
+      barrier = hvd.allreduce(tf.constant(0))
+      with tf.Session(config=config) as sess:
+          sess.run(barrier)
 
-    eval_input_fn = problem.make_estimator_input_fn(tf.estimator.ModeKeys.EVAL, hparams)
+  # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
+  for n in range(train_eval_iterations):
+      if not FLAGS.horovod or hvd.rank() != 0:
+          estimator.train(
+              input_fn=train_input_fn,
+              hooks=training_hooks,
+              # TODO: LR dependent on train steps, are we resetting this every time then?
+              steps=num_train_steps)
 
-    eval_steps = 1000
-    result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
-
-    output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
-    with tf.gfile.GFile(output_eval_file, "w") as writer:
-      tf.logging.info("***** Eval results *****")
-      for key in sorted(result.keys()):
-        tf.logging.info("  %s = %s", key, str(result[key]))
-        writer.write("%s = %s\n" % (key, str(result[key])))
+      if not FLAGS.horovod or hvd.rank() == 0:
+          result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
+          tf.logging.info("***** Eval results *****")
+          for key in sorted(result.keys()):
+              tf.logging.info("  %s = %s", key, str(result[key]))
 
 
 if __name__ == "__main__":
