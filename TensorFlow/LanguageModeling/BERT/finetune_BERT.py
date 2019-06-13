@@ -383,9 +383,10 @@ def main(_):
       eval_batch_size=FLAGS.eval_batch_size,
       predict_batch_size=FLAGS.predict_batch_size)
 
-  tf.logging.info("***** Running training *****")
-  tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
-  tf.logging.info("  Num steps = %d", num_train_steps)
+  tf.logging.info("***** Running training *****",
+                  hvd.rank() if FLAGS.horovod else 'no hvd', )
+  #tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
+  #tf.logging.info("  Num steps = %d", num_train_steps)
   train_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
   #train_input_fn = problem.horovod_input_fn_builder(
@@ -400,22 +401,24 @@ def main(_):
       hparams,
       None if not FLAGS.horovod else hvd)
 
-  if FLAGS.horovod:
-      barrier = hvd.allreduce(tf.constant(0))
-      with tf.Session(config=config) as sess:
-          sess.run(barrier)
-
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   for n in range(train_eval_iterations):
-      if not FLAGS.horovod or hvd.rank() != 0:
-          estimator.train(
-              input_fn=train_input_fn,
-              hooks=training_hooks,
-              # TODO: LR dependent on train steps, are we resetting this every time then?
-              steps=num_train_steps)
+      estimator.train(
+          input_fn=train_input_fn,
+          hooks=training_hooks,
+          # TODO: LR dependent on train steps, are we resetting this every time then?
+          steps=num_train_steps)
+
+      if FLAGS.horovod:
+          barrier = hvd.allreduce(tf.constant(0))
+          with tf.Session(config=config) as sess:
+              sess.run(barrier)
 
       if not FLAGS.horovod or hvd.rank() == 0:
-          result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
+          result = estimator.evaluate(
+                input_fn=eval_input_fn,
+                steps=eval_steps,
+                hooks=[_LogEvalRunHook()
           tf.logging.info("***** Eval results *****")
           for key in sorted(result.keys()):
               tf.logging.info("  %s = %s", key, str(result[key]))
