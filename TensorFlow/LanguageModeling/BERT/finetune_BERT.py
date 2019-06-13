@@ -418,7 +418,7 @@ def main(_):
           result = estimator.evaluate(
                 input_fn=eval_input_fn,
                 steps=eval_steps,
-                hooks=[_LogEvalRunHook()
+                hooks=[_LogEvalRunHook(FLAGS.eval_batch_size)])
           tf.logging.info("***** Eval results *****")
           for key in sorted(result.keys()):
               tf.logging.info("  %s = %s", key, str(result[key]))
