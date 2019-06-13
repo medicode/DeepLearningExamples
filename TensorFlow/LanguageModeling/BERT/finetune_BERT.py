@@ -156,7 +156,7 @@ class _OomReportingHook(tf.train.SessionRunHook):
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
-                 labels, num_labels, use_one_hot_embeddings, hparams):
+                 labels, use_one_hot_embeddings, hparams):
   """Creates a classification model."""
   target_modality = hparams.problem_hparams.target_modality
   input_modality = hparams.problem_hparams.input_modality
@@ -188,7 +188,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   return loss, top_out['logits']
 
 
-def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
+def model_fn_builder(bert_config, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps, use_tpu,
                      use_one_hot_embeddings, hparams, problem, hvd=None, use_fp16=False):
   """Returns `model_fn` closure for TPUEstimator."""
@@ -209,7 +209,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     (total_loss, logits) = create_model(
         bert_config, is_training, input_ids, input_mask, segment_ids, label_ids,
-        num_labels, use_one_hot_embeddings, hparams)
+        use_one_hot_embeddings, hparams)
 
     tvars = tf.trainable_variables()
     initialized_variable_names = {}
@@ -361,7 +361,6 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      num_labels=problem.label_manager,
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=learning_rate,
       num_train_steps=num_train_steps,
