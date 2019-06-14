@@ -64,10 +64,7 @@ flags.DEFINE_integer("predict_batch_size", 8, "Total batch size for predict.")
 flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
 
-flags.DEFINE_float("num_train_epochs", 3.0,
-                   "Total number of training epochs to perform.")
-
-flags.DEFINE_float(
+flags.DEFINE_integer(
     "warmup_steps", 10,
     "Number of training steps to perform linear learning rate warmup for. ")
 
@@ -114,50 +111,51 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
     self.global_batch_size = global_batch_size
     self.display_every = display_every
     self.hvd_rank = hvd_rank
+
   def after_create_session(self, session, coord):
-    if FLAGS.use_fp16:
-      print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate  Loss-scaler')
-    else:
-      print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate')
+    if self.hvd_rank <= 0:
+      if FLAGS.use_fp16:
+        print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate  Loss-scaler')
+      else:
+        print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate')
     self.elapsed_secs = 0.
     self.count = 0
+
   def before_run(self, run_context):
     self.t0 = time.time()
     if FLAGS.use_fp16:
       return tf.train.SessionRunArgs(
           fetches=['step_update:0', 'total_loss:0',
-                   'learning_rate:0', 'nsp_loss:0',
-                   'mlm_loss:0', 'loss_scale:0'])
+                   'learning_rate:0', 'loss_scale:0'])
     else:
       return tf.train.SessionRunArgs(
-          fetches=['step_update:0', 'total_loss:0',
-                   'learning_rate:0', 'nsp_loss:0',
-                   'mlm_loss:0'])
+          fetches=['step_update:0', 'total_loss:0', 'learning_rate:0'])
+
   def after_run(self, run_context, run_values):
     self.elapsed_secs += time.time() - self.t0
     self.count += 1
     if FLAGS.use_fp16:
-      global_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
+      global_step, total_loss, lr, loss_scaler = run_values.results
     else:
-      global_step, total_loss, lr, nsp_loss, mlm_loss = run_values.results
+      global_step, total_loss, lr = run_values.results
     print_step = global_step + 1 # One-based index for printing.
     if print_step == 1 or print_step % self.display_every == 0:
         dt = self.elapsed_secs / self.count
         img_per_sec = self.global_batch_size / dt
         if self.hvd_rank >= 0:
           if FLAGS.use_fp16:
-            print('%2d :: %6i %11.1f %10.4e %10.4e %6.3f     %6.4e  %6.4e' %
-                  (self.hvd_rank, print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr, loss_scaler))
+            print('%2d :: %6i %11.1f %6.3f     %6.4e  %6.4e' %
+                  (self.hvd_rank, print_step, img_per_sec, total_loss, lr, loss_scaler))
           else:
-            print('%2d :: %6i %11.1f %10.4e %10.4e %6.3f     %6.4e' %
-                  (self.hvd_rank, print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr))
+            print('%2d :: %6i %11.1f %10.4e %6.3f     %6.4e' %
+                  (self.hvd_rank, print_step, img_per_sec, mlm_loss, total_loss, lr))
         else:
           if FLAGS.use_fp16:
-            print('%6i %11.1f %10.4e %10.4e %6.3f     %6.4e  %6.4e' %
-                  (print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr, loss_scaler))
+            print('%6i %11.1f %6.3f     %6.4e  %6.4e' %
+                  (print_step, img_per_sec, total_loss, lr, loss_scaler))
           else:
-            print('%6i %11.1f %10.4e %10.4e %6.3f     %6.4e' %
-                  (print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr))
+            print('%6i %11.1f %6.3f     %6.4e' %
+                  (print_step, img_per_sec, total_loss, lr))
         self.elapsed_secs = 0.
         self.count = 0
 
@@ -224,6 +222,8 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     (total_loss, logits) = create_model(
         bert_config, is_training, input_ids, input_mask, segment_ids, label_ids,
         use_one_hot_embeddings, hparams)
+    # for logging hook to pick up
+    total_loss = tf.identity(total_loss, name='total_loss')
 
     tvars = tf.trainable_variables()
     initialized_variable_names = {}
@@ -308,16 +308,12 @@ def main(_):
   eval_steps = 100
   eval_frequency_steps = 100
 
-  if FLAGS.horovod:
-      num_train_steps //= hvd.size()
-      num_warmup_steps //= hvd.size()
-
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
   master_process = True
   training_hooks = []
 
-  hvd_rank = 0
+  hvd_rank = -1
 
   tpu_cluster_resolver = None
   if FLAGS.use_tpu and FLAGS.tpu_name:
@@ -331,8 +327,8 @@ def main(_):
       tf.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
       global_batch_size = FLAGS.train_batch_size * hvd.size()
       learning_rate = learning_rate * hvd.size()
-      master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
+      master_process = (hvd_rank == 0)
       config.gpu_options.allow_growth = True
       config.gpu_options.visible_device_list = str(hvd.local_rank())
       if hvd.size() > 1:
@@ -350,7 +346,7 @@ def main(_):
       master=FLAGS.master,
       model_dir=FLAGS.output_dir,
       session_config=config,
-      save_checkpoints_steps=FLAGS.save_checkpoints_steps,
+      save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
       log_step_count_steps=1,
       tpu_config=tf.contrib.tpu.TPUConfig(
           iterations_per_loop=FLAGS.iterations_per_loop,
@@ -407,7 +403,7 @@ def main(_):
 
   train_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
-  training_hooks.append(_LogSessionRunHook(global_batch_size, 10, -1 if not FLAGS.horovod else hvd_rank))
+  training_hooks.append(_LogSessionRunHook(global_batch_size, 10, hvd_rank))
 
   #training_hooks.append(_OomReportingHook())
 
@@ -420,14 +416,13 @@ def main(_):
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
   for i in range(2):
       if master_process:
-          tf.logging.info("***** Running training *****",
-                          hvd.rank() if FLAGS.horovod else 'no hvd')
+          tf.logging.info("***** Running training ***** " + str(hvd_rank))
       # TODO: verify we are not reloading bert every time
       estimator.train(
           input_fn=train_input_fn,
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
-          steps=num_train_steps)
+          steps=eval_frequency_steps)
 
       if master_process:
           tf.logging.info("***** Running eval *****")
