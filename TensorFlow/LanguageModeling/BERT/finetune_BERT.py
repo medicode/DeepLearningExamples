@@ -305,7 +305,6 @@ def main(_):
   # max train steps
   num_train_steps = 1e7
   num_warmup_steps = FLAGS.warmup_steps
-  eval_steps = 100
   eval_frequency_steps = 100
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
@@ -426,9 +425,7 @@ def main(_):
 
       if master_process:
           tf.logging.info("***** Running eval *****")
-          result = estimator.evaluate(
-                input_fn=eval_input_fn,
-                steps=eval_steps)
+          result = estimator.evaluate(input_fn=eval_input_fn)
           tf.logging.info("***** Eval results *****")
           for key in sorted(result.keys()):
               tf.logging.info("  %s = %s", key, str(result[key]))
