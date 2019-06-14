@@ -115,9 +115,9 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
   def after_create_session(self, session, coord):
     if self.hvd_rank <= 0:
       if FLAGS.use_fp16:
-        print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate  Loss-scaler')
+        print('  Step samples/sec   Loss  Learning-rate  Loss-scaler')
       else:
-        print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate')
+        print('  Step samples/sec   Loss  Learning-rate')
     self.elapsed_secs = 0.
     self.count = 0
 
@@ -147,8 +147,8 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
             print('%2d :: %6i %11.1f %6.3f     %6.4e  %6.4e' %
                   (self.hvd_rank, print_step, img_per_sec, total_loss, lr, loss_scaler))
           else:
-            print('%2d :: %6i %11.1f %10.4e %6.3f     %6.4e' %
-                  (self.hvd_rank, print_step, img_per_sec, mlm_loss, total_loss, lr))
+            print('%2d :: %6i %11.1f %6.3f     %6.4e' %
+                  (self.hvd_rank, print_step, img_per_sec, total_loss, lr))
         else:
           if FLAGS.use_fp16:
             print('%6i %11.1f %6.3f     %6.4e  %6.4e' %
