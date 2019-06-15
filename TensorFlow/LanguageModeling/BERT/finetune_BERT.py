@@ -265,14 +265,16 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           scaffold_fn=scaffold_fn)
     elif mode == tf.estimator.ModeKeys.EVAL:
       #logits.update({'labels': labels})
-      eval_metrics = lambda logits, labels: {
-          name: call(logits, labels)
-          for name, call in problem.all_metrics_fns.items()
-          if name in problem.eval_metrics()}
+      def metric_fn(logits, labels):
+          return {
+              name: call(logits, labels)
+              for name, call in problem.all_metrics_fns.items()
+              if name in problem.eval_metrics()}
+
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
-          eval_metrics=(eval_metrics, [logits, labels]),
+          eval_metrics=(metric_fn, [logits, labels]),
           scaffold_fn=scaffold_fn)
     else:
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
@@ -419,13 +421,15 @@ def main(_):
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
   for i in range(2):
       if master_process:
-          tf.logging.info("***** Running training ***** " + str(hvd_rank))
+          tf.logging.info("***** Running training *****")
       # TODO: verify we are not reloading bert every time
+      '''
       estimator.train(
           input_fn=train_input_fn,
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
+      '''
 
       if master_process:
           tf.logging.info("***** Running eval *****")
