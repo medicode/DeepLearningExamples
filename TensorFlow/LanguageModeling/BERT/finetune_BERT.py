@@ -433,7 +433,7 @@ def main(_):
 
       if master_process:
           tf.logging.info("***** Running eval *****")
-          result = estimator.evaluate(input_fn=eval_input_fn)
+          result = estimator.evaluate(input_fn=eval_input_fn, steps=None)
           tf.logging.info("***** Eval results *****")
           for key in sorted(result.keys()):
               tf.logging.info("  %s = %s", key, str(result[key]))
