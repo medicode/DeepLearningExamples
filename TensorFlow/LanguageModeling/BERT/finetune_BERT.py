@@ -65,6 +65,10 @@ flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
 flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
 
 flags.DEFINE_integer(
+    "eval_frequency_steps", 10,
+    "Number of training steps per gpu between evals.")
+
+flags.DEFINE_integer(
     "warmup_steps", 10,
     "Number of training steps to perform linear learning rate warmup for. ")
 
@@ -305,7 +309,7 @@ def main(_):
   # max train steps
   num_train_steps = 1e7
   num_warmup_steps = FLAGS.warmup_steps
-  eval_frequency_steps = 100
+  eval_frequency_steps = FLAGS.eval_frequency_steps
 
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
@@ -346,7 +350,7 @@ def main(_):
       model_dir=FLAGS.output_dir,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
-      log_step_count_steps=1,
+      log_step_count_steps=100000000000,
       tpu_config=tf.contrib.tpu.TPUConfig(
           iterations_per_loop=FLAGS.iterations_per_loop,
           num_shards=FLAGS.num_tpu_cores,
@@ -402,7 +406,7 @@ def main(_):
 
   train_input_fn = problem.make_estimator_input_fn(
       tf.estimator.ModeKeys.TRAIN, hparams, None if not FLAGS.horovod else hvd)
-  training_hooks.append(_LogSessionRunHook(global_batch_size, 10, hvd_rank))
+  training_hooks.append(_LogSessionRunHook(global_batch_size, 100, hvd_rank))
 
   #training_hooks.append(_OomReportingHook())
 
