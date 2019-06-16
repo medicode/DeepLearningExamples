@@ -171,6 +171,31 @@ class _OomReportingHook(tf.train.SessionRunHook):
                                   report_tensor_allocations_upon_oom=True))
 
 
+class InitBertHook(tf.train.SessionRunHook):
+    def __init__(self, initialize_bert, init_checkpoint, hvd = None):
+        self._initialize_bert = initialize_bert
+        self._init_checkpoint = init_checkpoint
+        self._hvd = hvd
+
+    def begin(self):
+        if not self._initialize_bert:
+            return
+
+        tvars = tf.trainable_variables()
+        initialized_variable_names = {}
+        if self._init_checkpoint and (self._hvd is None or self._hvd.rank() == 0):
+          (assignment_map, initialized_variable_names
+          ) = modeling.get_assignment_map_from_checkpoint(tvars, self._init_checkpoint)
+          tf.train.init_from_checkpoint(self._init_checkpoint, assignment_map)
+
+        tf.logging.info("**** Trainable Variables ****")
+        for var in tvars:
+          init_string = ""
+          if var.name in initialized_variable_names:
+            init_string = ", *INIT_FROM_CKPT*"
+          tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape, init_string)
+
+
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
                  labels, use_one_hot_embeddings, hparams):
   """Creates a classification model."""
@@ -204,7 +229,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   return loss, top_out['logits']
 
 
-def model_fn_builder(bert_config, init_checkpoint, learning_rate,
+def model_fn_builder(bert_config, learning_rate,
                      num_train_steps, num_warmup_steps, use_tpu,
                      use_one_hot_embeddings, hparams, problem, hvd=None, use_fp16=False):
   """Returns `model_fn` closure for TPUEstimator."""
@@ -229,29 +254,6 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     # for logging hook to pick up
     total_loss = tf.identity(total_loss, name='total_loss')
 
-    tvars = tf.trainable_variables()
-    initialized_variable_names = {}
-    scaffold_fn = None
-    if init_checkpoint and (hvd is None or hvd.rank() == 0):
-      (assignment_map, initialized_variable_names
-      ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
-      if use_tpu:
-
-        def tpu_scaffold():
-          tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
-          return tf.train.Scaffold()
-
-        scaffold_fn = tpu_scaffold
-      else:
-        tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
-
-    tf.logging.info("**** Trainable Variables ****")
-    for var in tvars:
-      init_string = ""
-      if var.name in initialized_variable_names:
-        init_string = ", *INIT_FROM_CKPT*"
-      tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape, init_string)
-
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
       train_op = optimization.create_optimizer(
@@ -262,7 +264,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           mode=mode,
           loss=total_loss,
           train_op=train_op,
-          scaffold_fn=scaffold_fn)
+          scaffold_fn=None)
     elif mode == tf.estimator.ModeKeys.EVAL:
       #logits.update({'labels': labels})
       def metric_fn(logits, labels):
@@ -280,12 +282,12 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
           mode=mode,
           loss=total_loss,
           eval_metrics=(metric_fn, [logits, labels]),
-          scaffold_fn=scaffold_fn)
+          scaffold_fn=None)
     else:
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           predictions={"probabilities": probabilities},
-          scaffold_fn=scaffold_fn)
+          scaffold_fn=None)
     return output_spec
 
   return model_fn
@@ -357,6 +359,7 @@ def main(_):
       model_dir=FLAGS.output_dir,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      # so we only use our hook
       log_step_count_steps=100000000000,
       tpu_config=tf.contrib.tpu.TPUConfig(
           iterations_per_loop=FLAGS.iterations_per_loop,
@@ -389,7 +392,6 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=learning_rate,
       num_train_steps=num_train_steps,
       num_warmup_steps=num_warmup_steps,
@@ -425,9 +427,16 @@ def main(_):
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
   for i in range(10):
+      init_bert_hook = InitBertHook(
+          initialize_bert=(i == 0),
+          init_checkpoint=FLAGS.init_checkpoint,
+          hvd=hvd)
+
       if master_process:
           tf.logging.info("***** Running training *****")
-      # TODO: verify we are not reloading bert every time
+      # TODO: move init from checkpoint to a InitHook
+      # should restore parts of the graph on the begin call but only
+      # on first loop
       estimator.train(
           input_fn=train_input_fn,
           hooks=training_hooks,
