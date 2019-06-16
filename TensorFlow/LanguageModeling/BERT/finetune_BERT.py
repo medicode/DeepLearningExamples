@@ -424,17 +424,15 @@ def main(_):
 
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
-  for i in range(2):
+  for i in range(10):
       if master_process:
           tf.logging.info("***** Running training *****")
       # TODO: verify we are not reloading bert every time
-      '''
       estimator.train(
           input_fn=train_input_fn,
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
-      '''
 
       if master_process:
           tf.logging.info("***** Running eval *****")
