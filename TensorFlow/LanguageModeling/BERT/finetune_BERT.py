@@ -427,6 +427,7 @@ def main(_):
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
   for i in range(10):
+      # TODO: we should use a check on model_dir to decide if we initialize_bert
       init_bert_hook = InitBertHook(
           initialize_bert=(i == 0),
           init_checkpoint=FLAGS.init_checkpoint,
