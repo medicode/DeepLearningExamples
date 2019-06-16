@@ -266,8 +266,13 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     elif mode == tf.estimator.ModeKeys.EVAL:
       #logits.update({'labels': labels})
       def metric_fn(logits, labels):
+
+          def get_update_op(_metric_fn, logits, labels):
+              update_op, _ = _metric_fn(logits, labels)
+              return tf.constant(0.0), update_op
+
           return {
-              name: call(logits, labels)
+              name: get_update_op(call, logits, labels)
               for name, call in problem.all_metrics_fns.items()
               if name in problem.eval_metrics()}
 
