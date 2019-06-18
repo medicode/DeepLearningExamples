@@ -266,7 +266,8 @@ def model_fn_builder(bert_config, learning_rate,
           train_op=train_op,
           scaffold_fn=None)
     elif mode == tf.estimator.ModeKeys.EVAL:
-      #logits.update({'labels': labels})
+
+      print('logits', logits, labels)
       def metric_fn(logits, labels):
 
           def get_update_op(_metric_fn, logits, labels):
@@ -426,7 +427,9 @@ def main(_):
 
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
-  for i in range(10):
+  #for i in range(10):
+  for i in [0]:
+      '''
       # TODO: we should use a check on model_dir to decide if we initialize_bert
       init_bert_hook = InitBertHook(
           initialize_bert=(i == 0),
@@ -443,7 +446,7 @@ def main(_):
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
-
+      '''
       if master_process:
           tf.logging.info("***** Running eval *****")
           result = estimator.evaluate(input_fn=eval_input_fn, steps=None)
