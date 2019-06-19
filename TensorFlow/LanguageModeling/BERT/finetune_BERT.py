@@ -13,6 +13,9 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
 
+from fathomtf.utils.tfutils import debug_tfprint
+
+
 flags = tf.flags
 
 FLAGS = flags.FLAGS
@@ -267,22 +270,23 @@ def model_fn_builder(bert_config, learning_rate,
           scaffold_fn=None)
     elif mode == tf.estimator.ModeKeys.EVAL:
 
-      print('logits', logits, labels)
-      def metric_fn(logits, labels):
+      #logits = debug_tfprint('logits', logits)
+      #labels = debug_tfprint('label_ids', label_ids)
+      def metric_fn(_logits, _labels):
 
-          def get_update_op(_metric_fn, logits, labels):
-              update_op, _ = _metric_fn(logits, labels)
+          def get_update_op(_metric_fn, _logits, _labels):
+              update_op, _ = _metric_fn(_logits, _labels)
               return tf.constant(0.0), update_op
 
           return {
-              name: get_update_op(call, logits, labels)
+              name: get_update_op(call, _logits, _labels)
               for name, call in problem.all_metrics_fns.items()
               if name in problem.eval_metrics()}
 
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
-          eval_metrics=(metric_fn, [logits, labels]),
+          eval_metrics=(metric_fn, [logits, label_ids]),
           scaffold_fn=None)
     else:
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
@@ -412,6 +416,7 @@ def main(_):
       config=run_config,
       train_batch_size=FLAGS.train_batch_size,
       eval_batch_size=FLAGS.eval_batch_size,
+      #eval_batch_size=1,
       predict_batch_size=FLAGS.predict_batch_size)
 
   train_input_fn = problem.make_estimator_input_fn(
@@ -427,9 +432,8 @@ def main(_):
 
   # https://github.com/horovod/horovod/issues/182#issuecomment-401486859
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
-  #for i in range(10):
-  for i in [0]:
-      '''
+  for i in range(10):
+  #for i in [0]:
       # TODO: we should use a check on model_dir to decide if we initialize_bert
       init_bert_hook = InitBertHook(
           initialize_bert=(i == 0),
@@ -446,10 +450,10 @@ def main(_):
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
-      '''
       if master_process:
           tf.logging.info("***** Running eval *****")
           result = estimator.evaluate(input_fn=eval_input_fn, steps=None)
+          #result = estimator.evaluate(input_fn=eval_input_fn, steps=1)
           tf.logging.info("***** Eval results *****")
           for key in sorted(result.keys()):
               tf.logging.info("  %s = %s", key, str(result[key]))
