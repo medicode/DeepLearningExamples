@@ -151,17 +151,17 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
         img_per_sec = self.global_batch_size / dt
         if self.hvd_rank >= 0:
           if FLAGS.use_fp16:
-            print('%2d :: %6i %11.1f %6.3f     %6.4e  %6.4e' %
+            print('%2d :: %6i %11.1f %6.4e     %6.4e  %6.4e' %
                   (self.hvd_rank, print_step, img_per_sec, total_loss, lr, loss_scaler))
           else:
-            print('%2d :: %6i %11.1f %6.3f     %6.4e' %
+            print('%2d :: %6i %11.1f %6.4f     %6.4e' %
                   (self.hvd_rank, print_step, img_per_sec, total_loss, lr))
         else:
           if FLAGS.use_fp16:
-            print('%6i %11.1f %6.3f     %6.4e  %6.4e' %
+            print('%6i %11.1f %6.4f     %6.4e  %6.4e' %
                   (print_step, img_per_sec, total_loss, lr, loss_scaler))
           else:
-            print('%6i %11.1f %6.3f     %6.4e' %
+            print('%6i %11.1f %6.4f     %6.4e' %
                   (print_step, img_per_sec, total_loss, lr))
         self.elapsed_secs = 0.
         self.count = 0
