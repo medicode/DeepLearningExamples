@@ -271,15 +271,11 @@ def model_fn_builder(bert_config, learning_rate,
     elif mode == tf.estimator.ModeKeys.EVAL:
 
       #logits = debug_tfprint('logits', logits)
-      #labels = debug_tfprint('label_ids', label_ids)
+      #label_ids = debug_tfprint('label_ids', label_ids)
       def metric_fn(_logits, _labels):
 
-          def get_update_op(_metric_fn, _logits, _labels):
-              update_op, _ = _metric_fn(_logits, _labels)
-              return tf.constant(0.0), update_op
-
           return {
-              name: get_update_op(call, _logits, _labels)
+              name: call(_logits, _labels)
               for name, call in problem.all_metrics_fns.items()
               if name in problem.eval_metrics()}
 
@@ -434,9 +430,21 @@ def main(_):
   # TODO: replace with ValidationMonitor and EarlyStoppingHook
   for i in range(10):
   #for i in [0]:
+      from gcloud.gcs import fhfile
+      END_EXT = '.meta'
+      candidates = list(filter(
+          lambda path: path.startswith('model.ckpt'),
+          (os.path.basename(f) for f in fhfile.walk_path(
+              location=FLAGS.output_dir,
+              depth=1,
+              extension=END_EXT))))
+      if candidates:
+          print('checkpoints exist', candidates)
+          print('do not initialize bert')
+
       # TODO: we should use a check on model_dir to decide if we initialize_bert
       init_bert_hook = InitBertHook(
-          initialize_bert=(i == 0),
+          initialize_bert=not candidates,
           init_checkpoint=FLAGS.init_checkpoint,
           hvd=hvd)
 
@@ -450,6 +458,7 @@ def main(_):
           hooks=training_hooks,
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
+
       if master_process:
           tf.logging.info("***** Running eval *****")
           result = estimator.evaluate(input_fn=eval_input_fn, steps=None)
