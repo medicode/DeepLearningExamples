@@ -393,7 +393,7 @@ def main(_):
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      learning_rate=learning_rate,
+      learning_rate=learning_rate if not FLAGS.horovod else FLAGS.learning_rate * hvd.size(),
       num_train_steps=num_train_steps,
       num_warmup_steps=num_warmup_steps,
       use_tpu=FLAGS.use_tpu,
