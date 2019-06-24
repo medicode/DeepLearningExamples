@@ -191,12 +191,12 @@ class InitBertHook(tf.train.SessionRunHook):
           ) = modeling.get_assignment_map_from_checkpoint(tvars, self._init_checkpoint)
           tf.train.init_from_checkpoint(self._init_checkpoint, assignment_map)
 
-        tf.logging.info("**** Trainable Variables ****")
+        print("**** Trainable Variables ****")
         for var in tvars:
           init_string = ""
           if var.name in initialized_variable_names:
             init_string = ", *INIT_FROM_CKPT*"
-          tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape, init_string)
+          print(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape, init_string)
 
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
@@ -441,6 +441,8 @@ def main(_):
       if candidates:
           print('checkpoints exist', candidates)
           print('do not initialize bert')
+      else:
+          print('initialize bert')
 
       # TODO: we should use a check on model_dir to decide if we initialize_bert
       init_bert_hook = InitBertHook(
