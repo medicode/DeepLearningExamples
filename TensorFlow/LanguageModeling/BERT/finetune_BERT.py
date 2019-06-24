@@ -452,12 +452,13 @@ def main(_):
 
       if master_process:
           tf.logging.info("***** Running training *****")
+
       # TODO: move init from checkpoint to a InitHook
       # should restore parts of the graph on the begin call but only
       # on first loop
       estimator.train(
           input_fn=train_input_fn,
-          hooks=training_hooks,
+          hooks=training_hooks + [init_bert_hook],
           # TODO: LR dependent on train steps, are we resetting this every time then?
           steps=eval_frequency_steps)
 
