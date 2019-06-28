@@ -214,9 +214,8 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
       compute_type=tf.float32)
 
-  # [B, 384, D]
-  body_outputs = model.get_sequence_output()
-  body_outputs = tf.expand_dims(body_outputs, axis=-2)
+  # [B, T/chunk_size, D]
+  body_output = model.get_sequence_output()
 
   top_out = target_modality.top(body_outputs, None)
 
