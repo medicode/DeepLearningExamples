@@ -217,7 +217,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   # [B, T/chunk_size, D]
   body_output = model.get_sequence_output()
 
-  top_out = target_modality.top(body_outputs, None)
+  top_out = target_modality.top(body_output, None)
 
   num, den = target_modality.loss(top_out, labels)
   loss = num / den
