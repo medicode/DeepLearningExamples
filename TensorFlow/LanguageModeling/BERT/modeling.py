@@ -259,7 +259,7 @@ class BertModel(object):
       self.sequence_output = tf.reshape(
           self.sequence_output, [batch_size, batch_multiplier, chunk_size, depth])
       # [B, T/chunk_size, D]
-      #self.sequence_output = self.sequence_output[:, :, 0, :]
+      self.sequence_output = self.sequence_output[:, :, 0, :]
       #self.sequence_output = debug_tfprint('sequence output final', self.sequence_output, tf.shape)
       # end chunk
 
