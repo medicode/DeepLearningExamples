@@ -166,8 +166,23 @@ class BertModel(object):
     batch_size = input_shape[0]
     seq_length = input_shape[1]
 
-    #from fathomtf.utils.tfutils import debug_tfprint
-    #input_ids = debug_tfprint('input ids before embedding', input_ids, tf.shape)
+    from fathomtf.utils.tfutils import debug_tfprint
+    # [B, T]
+    input_ids = debug_tfprint('input ids before embedding', input_ids, tf.shape)
+
+    # start chunk
+    chunk_size = 64
+
+    depth = config.hidden_size
+    batch_multiplier = seq_length // chunk_size
+    new_batch_size = batch_size * batch_multiplier
+
+    # [B * T/chunk_size, chunk_size]
+    input_ids = tf.reshape(input_ids, [new_batch_size, chunk_size])
+    input_mask = tf.reshape(input_mask, [new_batch_size, chunk_size])
+    token_type_ids = tf.reshape(token_type_ids, [new_batch_size, chunk_size])
+
+    # end chunk
 
     if input_mask is None:
       input_mask = tf.ones(shape=[batch_size, seq_length], dtype=tf.int32)
@@ -199,31 +214,6 @@ class BertModel(object):
             initializer_range=config.initializer_range,
             max_position_embeddings=config.max_position_embeddings,
             dropout_prob=config.hidden_dropout_prob)
-
-      # start chunk
-      chunk_size = 64
-
-      # [B, T, D]
-      #self.embedding_output = debug_tfprint('embedding output', self.embedding_output, tf.shape)
-      depth = config.hidden_size
-
-      batch_multiplier = seq_length // chunk_size
-      new_batch_size = batch_size * batch_multiplier
-
-      # [B * T/chunk_size, chunk_size, D]
-      self.embedding_output = tf.reshape(self.embedding_output, [new_batch_size, chunk_size, depth])
-      #self.embedding_output = debug_tfprint('transformed embedding output', self.embedding_output, tf.shape)
-
-      # [B, T]
-      #input_mask = debug_tfprint('input mask before', input_mask, tf.shape)
-      #token_type_ids = debug_tfprint('token type ids before', token_type_ids, tf.shape)
-      # [B * T/chunk_size, chunk_size]
-      input_mask = tf.reshape(input_mask, [new_batch_size, chunk_size])
-      token_type_ids = tf.reshape(token_type_ids, [new_batch_size, chunk_size])
-
-      #input_mask = debug_tfprint('input mask after', input_mask, tf.shape)
-      #token_type_ids = debug_tfprint('token type ids after', token_type_ids, tf.shape)
-      # end chunk
 
       with tf.variable_scope("encoder"):
         # This converts a 2D mask of shape [batch_size, seq_length] to a 3D
