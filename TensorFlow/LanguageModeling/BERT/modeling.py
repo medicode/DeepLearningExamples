@@ -166,9 +166,9 @@ class BertModel(object):
     batch_size = input_shape[0]
     seq_length = input_shape[1]
 
-    from fathomtf.utils.tfutils import debug_tfprint
+    #from fathomtf.utils.tfutils import debug_tfprint
     # [B, T]
-    input_ids = debug_tfprint('input ids before embedding', input_ids, tf.shape)
+    #input_ids = debug_tfprint('input ids before embedding', input_ids, tf.shape)
 
     # start chunk
     chunk_size = 64
