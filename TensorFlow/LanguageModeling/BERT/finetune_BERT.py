@@ -216,12 +216,6 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
   # [B, 384, D]
   body_outputs = model.get_sequence_output()
-  #extended_batch_size = tf.shape(body_outputs)[0]
-  #chunk_size = tf.shape(body_outputs)[1]
-  #depth = tf.shape(body_outputs)[2]
-  #batch_size = extended_batch_size / chunk_size
-
-  #body_outputs = tf.reshape(body_outputs, [batch_size, extended_batch_size, depth])
   body_outputs = tf.expand_dims(body_outputs, axis=-2)
 
   top_out = target_modality.top(body_outputs, None)
