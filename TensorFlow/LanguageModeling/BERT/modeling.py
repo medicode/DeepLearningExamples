@@ -166,6 +166,9 @@ class BertModel(object):
     batch_size = input_shape[0]
     seq_length = input_shape[1]
 
+    #from fathomtf.utils.tfutils import debug_tfprint
+    #input_ids = debug_tfprint('input ids before embedding', input_ids, tf.shape)
+
     if input_mask is None:
       input_mask = tf.ones(shape=[batch_size, seq_length], dtype=tf.int32)
 
@@ -197,12 +200,40 @@ class BertModel(object):
             max_position_embeddings=config.max_position_embeddings,
             dropout_prob=config.hidden_dropout_prob)
 
+      # start chunk
+      chunk_size = 64
+
+      # [B, T, D]
+      #self.embedding_output = debug_tfprint('embedding output', self.embedding_output, tf.shape)
+      depth = config.hidden_size
+
+      batch_multiplier = seq_length // chunk_size
+      new_batch_size = batch_size * batch_multiplier
+
+      # [B * T/chunk_size, chunk_size, D]
+      self.embedding_output = tf.reshape(self.embedding_output, [new_batch_size, chunk_size, depth])
+      #self.embedding_output = debug_tfprint('transformed embedding output', self.embedding_output, tf.shape)
+
+      # [B, T]
+      #input_mask = debug_tfprint('input mask before', input_mask, tf.shape)
+      #token_type_ids = debug_tfprint('token type ids before', token_type_ids, tf.shape)
+      # [B * T/chunk_size, chunk_size]
+      input_mask = tf.reshape(input_mask, [new_batch_size, chunk_size])
+      token_type_ids = tf.reshape(token_type_ids, [new_batch_size, chunk_size])
+
+      #input_mask = debug_tfprint('input mask after', input_mask, tf.shape)
+      #token_type_ids = debug_tfprint('token type ids after', token_type_ids, tf.shape)
+      # end chunk
+
       with tf.variable_scope("encoder"):
         # This converts a 2D mask of shape [batch_size, seq_length] to a 3D
         # mask of shape [batch_size, seq_length, seq_length] which is used
         # for the attention scores.
+        # [B * T/chunk_size, chunk_size, D], [B * T/chunk_size, chunk_size]
+        # [B * T/chunk_size, chunk_size, chunk_size]
         attention_mask = create_attention_mask_from_input_mask(
-            input_ids, input_mask)
+            #input_ids, input_mask)
+            self.embedding_output, input_mask)
 
         # Run the stacked transformer.
         # `sequence_output` shape = [batch_size, seq_length, hidden_size].
@@ -220,6 +251,18 @@ class BertModel(object):
             do_return_all_layers=True)
 
       self.sequence_output = tf.cast(self.all_encoder_layers[-1], tf.float32)
+
+      # start chunk
+      # [B * T/chunk_size, chunk_size, D]
+      #self.sequence_output = debug_tfprint('sequence output', self.sequence_output, tf.shape)
+      # [B, T/chunk_size, chunk_size, D]
+      self.sequence_output = tf.reshape(
+          self.sequence_output, [batch_size, batch_multiplier, chunk_size, depth])
+      # [B, T/chunk_size, D]
+      #self.sequence_output = self.sequence_output[:, :, 0, :]
+      #self.sequence_output = debug_tfprint('sequence output final', self.sequence_output, tf.shape)
+      # end chunk
+
       # The "pooler" converts the encoded sequence tensor of shape
       # [batch_size, seq_length, hidden_size] to a tensor of shape
       # [batch_size, hidden_size]. This is necessary for segment-level
@@ -541,6 +584,9 @@ def create_attention_mask_from_input_mask(from_tensor, to_mask):
 
   to_shape = get_shape_list(to_mask, expected_rank=2)
   to_seq_length = to_shape[1]
+
+  #from fathomtf.utils.tfutils import debug_tfprint
+  #to_mask = debug_tfprint('to_mask', to_mask, tf.shape)
 
   to_mask = tf.cast(
       tf.reshape(to_mask, [batch_size, 1, to_seq_length]), tf.float32)
